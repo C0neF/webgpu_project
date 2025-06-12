@@ -11,7 +11,7 @@ export interface DiceRoll {
 
 export interface ScoreUpdate {
   playerId: string;
-  category: string;
+  category: string; // 保持string类型以确保网络传输兼容性
   score: number;
   timestamp: number;
 }

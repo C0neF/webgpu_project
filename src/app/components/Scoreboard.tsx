@@ -21,6 +21,7 @@ interface ScoreboardProps {
   myPlayerNumber?: Player | null;
   opponentCurrentFaces?: number[];
   opponentRollsLeft?: number;
+  gameStarted?: boolean; // 添加游戏开始状态
 }
 
 const Scoreboard: React.FC<ScoreboardProps> = ({
@@ -36,7 +37,8 @@ const Scoreboard: React.FC<ScoreboardProps> = ({
   isMyTurn = true,
   myPlayerNumber = null,
   opponentCurrentFaces = [1, 1, 1, 1, 1],
-  opponentRollsLeft = 3
+  opponentRollsLeft = 3,
+  gameStarted = false
 }) => {
   const getUpperScore = (player: Player) => {
     const scoreCard = player === 1 ? scoreCards.player1 : scoreCards.player2;
@@ -80,7 +82,8 @@ const Scoreboard: React.FC<ScoreboardProps> = ({
     }
 
     // 如果是对手的回合，显示对手的可选分数
-    if (playerIsCurrentPlayer && !playerIsMyPlayer && !isMyTurn && opponentRollsLeft < 3) {
+    // 只有在游戏已开始且对手已投掷过的情况下才显示分数
+    if (playerIsCurrentPlayer && !playerIsMyPlayer && !isMyTurn && gameStarted && opponentRollsLeft < 3) {
       return calculateScore(category, opponentCurrentFaces);
     }
 

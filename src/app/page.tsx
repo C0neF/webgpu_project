@@ -204,13 +204,23 @@ function GameUI({ onBackToLobby, roomId, webrtcManager, connectionInfo }: GameUI
             const opponentPlayerNumber: Player = currentMyPlayerNumber === 1 ? 2 : 1;
             const playerKey = `player${opponentPlayerNumber}` as const;
 
-            setScoreCards(prev => ({
-              ...prev,
-              [playerKey]: {
-                ...prev[playerKey],
-                [update.category as ScoreCategory]: update.score
-              }
-            }));
+            console.log(`更新对手(玩家${opponentPlayerNumber})分数:`, {
+              category: update.category,
+              score: update.score,
+              playerKey
+            });
+
+            setScoreCards(prev => {
+              const newScoreCards = {
+                ...prev,
+                [playerKey]: {
+                  ...prev[playerKey],
+                  [update.category as ScoreCategory]: update.score
+                }
+              };
+              console.log('更新后的计分板:', newScoreCards);
+              return newScoreCards;
+            });
           }
         }
       });
@@ -238,11 +248,19 @@ function GameUI({ onBackToLobby, roomId, webrtcManager, connectionInfo }: GameUI
           setCurrentFaces([1, 1, 1, 1, 1]);
           setOpponentCurrentFaces([1, 1, 1, 1, 1]);
 
-          // 强制重置骰子到1点
+          // 立即强制重置骰子状态和外观
+          if (diceCanvasRef.current) {
+            diceCanvasRef.current.reset();
+            diceCanvasRef.current.setDiceResults([1, 1, 1, 1, 1]);
+          }
+
+          // 额外的延迟重置，确保状态完全清理
           setTimeout(() => {
-            diceCanvasRef.current?.reset();
-            diceCanvasRef.current?.setDiceResults([1, 1, 1, 1, 1]);
-          }, 0);
+            if (diceCanvasRef.current) {
+              diceCanvasRef.current.reset();
+              diceCanvasRef.current.setDiceResults([1, 1, 1, 1, 1]);
+            }
+          }, 100);
 
           if (newIsMyTurn) {
             // 轮到自己，恢复自己的时间设置并可以调整
@@ -323,8 +341,9 @@ function GameUI({ onBackToLobby, roomId, webrtcManager, connectionInfo }: GameUI
         const straights = [[1, 2, 3, 4], [2, 3, 4, 5], [3, 4, 5, 6]];
         return straights.some(s => s.every(n => uniqueFaces.includes(n))) ? 15 : 0;
       case 'largeStraight':
-        const uniqueFacesStr = Array.from(new Set(faces)).sort().join('');
-        return uniqueFacesStr.includes('12345') || uniqueFacesStr.includes('23456') ? 30 : 0;
+        const uniqueFacesLarge = Array.from(new Set(faces)).sort((a, b) => a - b);
+        const uniqueFacesStr = uniqueFacesLarge.join('');
+        return uniqueFacesStr === '12345' || uniqueFacesStr === '23456' ? 30 : 0;
       case 'yahtzee':
         return counts.some(count => count === 5) ? 50 : 0;
       case 'chance':
@@ -340,6 +359,19 @@ function GameUI({ onBackToLobby, roomId, webrtcManager, connectionInfo }: GameUI
     const upperScore = (['ones', 'twos', 'threes', 'fours', 'fives', 'sixes'] as ScoreCategory[])
         .reduce((sum, category) => sum + (scoreCard[category] || 0), 0);
     const bonus = upperScore >= 63 ? 35 : 0;
+
+    // 调试信息
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`玩家${player}分数计算:`, {
+        scoreCard,
+        allScores,
+        total,
+        upperScore,
+        bonus,
+        finalTotal: total + bonus
+      });
+    }
+
     return total + bonus;
   };
 
@@ -374,22 +406,20 @@ function GameUI({ onBackToLobby, roomId, webrtcManager, connectionInfo }: GameUI
     if (currentPlayer === 2) {
       if (currentRound < 12) {
         newRound = currentRound + 1;
-        // 回合结束，重置为准备状态
-        setGameStarted(false);
-        setIsReady(false);
-        setOpponentReady(false);
+        // 回合切换，但保持游戏进行状态
+        // 不重置gameStarted、isReady、opponentReady
 
-        // 发送回合结束状态
+        // 发送回合切换状态
         if (webrtcManager) {
           webrtcManager.sendGameStateData({
             currentPlayer: 1, // 下一轮从玩家1开始
             currentRound: newRound,
             rollsLeft: 3,
-            gamePhase: 'waiting'
+            gamePhase: 'playing' // 保持游戏进行状态
           });
         }
 
-        // 更新本地状态但不开始游戏
+        // 更新本地状态，继续游戏
         setCurrentPlayer(1);
         setCurrentRound(newRound);
         setRollsLeft(3);
@@ -397,13 +427,21 @@ function GameUI({ onBackToLobby, roomId, webrtcManager, connectionInfo }: GameUI
         setOpponentSelectedDice([false, false, false, false, false]);
         setCurrentFaces([1, 1, 1, 1, 1]);
         setOpponentCurrentFaces([1, 1, 1, 1, 1]);
-        setIsMyTurn(false); // 等待准备状态
+        setIsMyTurn(myPlayerNumber === 1); // 根据玩家身份设置回合状态
 
-        // 强制重置骰子到1点
+        // 立即强制重置骰子状态和外观
+        if (diceCanvasRef.current) {
+          diceCanvasRef.current.reset();
+          diceCanvasRef.current.setDiceResults([1, 1, 1, 1, 1]);
+        }
+
+        // 额外的延迟重置，确保状态完全清理
         setTimeout(() => {
-          diceCanvasRef.current?.reset();
-          diceCanvasRef.current?.setDiceResults([1, 1, 1, 1, 1]);
-        }, 0);
+          if (diceCanvasRef.current) {
+            diceCanvasRef.current.reset();
+            diceCanvasRef.current.setDiceResults([1, 1, 1, 1, 1]);
+          }
+        }, 100);
 
         return;
       } else {
@@ -465,11 +503,19 @@ function GameUI({ onBackToLobby, roomId, webrtcManager, connectionInfo }: GameUI
     setOpponentCurrentFaces([1, 1, 1, 1, 1]);
     setIsMyTurn(myPlayerNumber === nextPlayer);
 
-    // 强制重置骰子到1点
+    // 立即强制重置骰子状态和外观
+    if (diceCanvasRef.current) {
+      diceCanvasRef.current.reset();
+      diceCanvasRef.current.setDiceResults([1, 1, 1, 1, 1]);
+    }
+
+    // 额外的延迟重置，确保状态完全清理
     setTimeout(() => {
-      diceCanvasRef.current?.reset();
-      diceCanvasRef.current?.setDiceResults([1, 1, 1, 1, 1]);
-    }, 0);
+      if (diceCanvasRef.current) {
+        diceCanvasRef.current.reset();
+        diceCanvasRef.current.setDiceResults([1, 1, 1, 1, 1]);
+      }
+    }, 100);
 
     // 发送游戏状态更新给对手
     if (webrtcManager) {
@@ -788,6 +834,7 @@ function GameUI({ onBackToLobby, roomId, webrtcManager, connectionInfo }: GameUI
             myPlayerNumber={myPlayerNumber}
             opponentCurrentFaces={opponentCurrentFaces}
             opponentRollsLeft={opponentRollsLeft}
+            gameStarted={gameStarted}
           />
         </div>
         </div>
